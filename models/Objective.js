@@ -1,25 +1,21 @@
 const mongoose = require("mongoose");
 
 const objectiveSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
   type: {
     type: String,
-    enum: ["electricity", "water", "waste"],
+    enum: ["energie", "water", "waste"],
     required: true,
   },
-  target_value: Number,
-  unit: String,
-  start_date: Date,
-  end_date: Date,
-  status: {
-    type: String,
-    enum: ["pending", "in_progress", "completed"],
-    default: "pending",
-  }
-}, { timestamps: true });
+  target: {
+    type: Number,
+    required: true,
+  },
+  active: {
+    type: Boolean,
+    default: true,
+  },
+   title: String,
+  user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+});
 
 module.exports = mongoose.model("Objective", objectiveSchema);
