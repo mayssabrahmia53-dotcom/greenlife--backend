@@ -1,39 +1,30 @@
+
 const mongoose = require("mongoose");
 
 const consumptionSchema = new mongoose.Schema(
   {
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
-    water: {
-      type: Number,
-      default: 0,
+    type: {
+      type: String,
+      enum: ["energie", "water", "waste"],
+      required: true,
     },
-
-    energy: {
+    value: {
       type: Number,
-      default: 0,
+      required: true,
     },
-
-    waste: {
-      type: Number,
-      default: 0,
-    },
-
-    month: {
+    unit: {
       type: String,
       required: true,
     },
-
-    equipmentData: [
-      {
-        name: String,
-        consumption: Number,
-      },
-    ],
+    date: {
+      type: Date,
+      required: true,
+    },
   },
   { timestamps: true }
 );

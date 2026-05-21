@@ -16,7 +16,8 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-
+  points: { type: Number, default: 0 },
+  ecoScore: { type: Number, default: 0 },
   city: {
     type: String,
     required: true

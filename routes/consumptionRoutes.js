@@ -1,166 +1,141 @@
-const express = require("express");
-const router = express.Router();
+const router = require("express").Router();
 const Consumption = require("../models/Consumption");
 const auth = require("../middlewares/authMiddleware");
 
+const unitMap = {
+  energie: "kWh",
+  water: "L",
+  waste: "kg",
+};
 
-// ================= GET ALL =================
+// ================= GET ALL
 router.get("/", auth, async (req, res) => {
   try {
+    const data =
+      req.user.role === "admin"
+        ? await Consumption.find().populate("user")
+        : await Consumption.find({ user: req.user.id });
 
-    const consumptions = await Consumption.find()
-      .populate("user", "name email city")
-      .sort({ date: -1 });
-
-    const formatted = consumptions.map(c => ({
-      _id: c._id,
-      userId: c.user ? c.user._id : null,
-      name: c.user ? c.user.name : "Unknown",
-      email: c.user ? c.user.email : "",
-      city: c.user ? c.user.city : "",
-
-      type: c.type,
-      value: c.value,
-      unit: c.unit,
-      date: c.date
-    }));
-
-    res.json(formatted);
-
+    res.json(data);
   } catch (err) {
-
-    console.error("GET consumptions error:", err);
-
-    res.status(500).json({
-      message: "Server error",
-      error: err.message
-    });
-
+    console.error("GET ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 
-
-// ================= GET USER CONSUMPTIONS =================
-router.get("/user/:userId", auth, async (req, res) => {
+// ================= GET LATEST
+router.get("/latest", auth, async (req, res) => {
   try {
+    const data = await Consumption.find({ user: req.user.id });
 
-    const consumptions = await Consumption.find({
-      user: req.params.userId
-    })
-      .populate("user", "name email city")
-      .sort({ date: -1 });
+    let result = {
+      energie: 0,
+      water: 0,
+      waste: 0,
+    };
 
-    res.json(consumptions);
-
-  } catch (err) {
-
-    console.error("GET user consumptions error:", err);
-
-    res.status(500).json({
-      message: "Server error",
-      error: err.message
+    data.forEach((c) => {
+      if (c.type === "energie") result.energie = c.value;
+      if (c.type === "water") result.water = c.value;
+      if (c.type === "waste") result.waste = c.value;
     });
 
+    res.json(result);
+  } catch (err) {
+    console.error("LATEST ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 
-
-// ================= CREATE =================
+// ================= CREATE (SMART + AUTO UNIT)
 router.post("/", auth, async (req, res) => {
   try {
+    const { type, value, date } = req.body;
 
-    const { type, value, unit, date } = req.body;
+    console.log("BODY:", req.body);
+    console.log("USER:", req.user);
 
-    const consumption = new Consumption({
-      user: req.user.id,   // 👈 ناخذ user من token
+    if (!type || value === undefined) {
+      return res.status(400).json({
+        message: "type and value required",
+      });
+    }
+
+    const newConsumption = new Consumption({
+      user: req.user.id,
       type,
-      value,
-      unit,
-      date
+      value: Number(value),
+
+      // 🔥 AUTO UNIT FROM BACKEND (MAIN FIX)
+      unit: unitMap[type] || "unknown",
+
+      date: date ? new Date(date) : new Date(),
     });
 
-    await consumption.save();
+    const saved = await newConsumption.save();
 
-    const populated = await consumption.populate(
-      "user",
-      "name email city"
-    );
-
-    res.status(201).json(populated);
-
+    res.status(201).json(saved);
   } catch (err) {
-
-    console.error("POST consumption error:", err);
-
+    console.error("🔥 FULL ERROR:", err);
     res.status(500).json({
-      message: "Server error",
-      error: err.message
+      message: err.message,
+      type: err.name,
     });
-
   }
 });
 
-
-// ================= UPDATE =================
+// ================= UPDATE
 router.put("/:id", auth, async (req, res) => {
   try {
-
-    const { type, value, unit, date } = req.body;
-
-    const consumption = await Consumption.findByIdAndUpdate(
-      req.params.id,
-      { type, value, unit, date },
-      { new: true }
-    ).populate("user", "name email city");
+    const consumption = await Consumption.findById(req.params.id);
 
     if (!consumption) {
-      return res.status(404).json({
-        message: "Consumption not found"
-      });
+      return res.status(404).json({ message: "Not found" });
     }
 
-    res.json(consumption);
+    if (
+      req.user.role !== "admin" &&
+      consumption.user.toString() !== req.user.id
+    ) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
 
+    const { value, date } = req.body;
+
+    if (value !== undefined) consumption.value = Number(value);
+    if (date !== undefined) consumption.date = date;
+
+    const updated = await consumption.save();
+
+    res.json(updated);
   } catch (err) {
-
-    console.error("UPDATE consumption error:", err);
-
-    res.status(500).json({
-      message: "Server error",
-      error: err.message
-    });
-
+    console.error("UPDATE ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 
-
-// ================= DELETE =================
+// ================= DELETE
 router.delete("/:id", auth, async (req, res) => {
   try {
+    const consumption = await Consumption.findById(req.params.id);
 
-    const deleted = await Consumption.findByIdAndDelete(
-      req.params.id
-    );
-
-    if (!deleted) {
-      return res.status(404).json({
-        message: "Consumption not found"
-      });
+    if (!consumption) {
+      return res.status(404).json({ message: "Not found" });
     }
 
-    res.json({
-      message: "Consumption deleted"
-    });
+    if (
+      req.user.role !== "admin" &&
+      consumption.user.toString() !== req.user.id
+    ) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
 
+    await consumption.deleteOne();
+
+    res.json({ message: "Deleted successfully" });
   } catch (err) {
-
-    console.error("DELETE consumption error:", err);
-
-    res.status(500).json({
-      message: "Server error",
-      error: err.message
-    });
-
+    console.error("DELETE ERROR:", err);
+    res.status(500).json({ message: err.message });
   }
 });
 

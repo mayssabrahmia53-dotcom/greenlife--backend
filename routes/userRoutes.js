@@ -27,6 +27,17 @@ router.get('/:id', auth, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
+// --- Get user's badges ---
+router.get('/:userId/badges', auth, async (req, res) => {
+    try {
+        const userBadges = await UserBadge.find({ user: req.params.userId }).populate('badge');
+        const badges = userBadges.map(ub => ub.badge);
+        res.json(badges);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
 
 // POST create user
 router.post('/', auth, async (req, res) => {

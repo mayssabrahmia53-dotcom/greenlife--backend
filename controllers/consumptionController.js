@@ -1,37 +1,31 @@
-// controllers/consumptionController.js
 const Consumption = require("../models/Consumption");
 
-// ➕ Add a new consumption
+// ➕ Add consumption (كما هو عندك)
 exports.addConsumption = async (req, res) => {
   try {
-    // 🔹 Debug info
     console.log("req.userId:", req.userId);
     console.log("req.body:", req.body);
 
     const { type, value, date, notes } = req.body;
 
-    // 🔹 Check required fields
     if (!type || !value) {
       return res.status(400).json({ message: "Type and value are required" });
     }
 
-    // 🔹 Determine unit
     let unit = "";
     if (type === "energie") unit = "kWh";
     else if (type === "water") unit = "m³";
     else if (type === "waste") unit = "kg";
     else return res.status(400).json({ message: "Invalid type" });
 
-    // 🔹 Create consumption
     const consumption = new Consumption({
-      user: req.userId, 
+      user: req.user.id,
       value,
       unit,
       notes: notes || "",
       date: date ? new Date(date) : new Date(),
     });
 
-    // 🔹 Save to DB
     await consumption.save();
 
     res.status(201).json(consumption);
@@ -41,15 +35,48 @@ exports.addConsumption = async (req, res) => {
   }
 };
 
-// 📥 Get all consumptions of the logged-in user
+
+
+// 📥 GET RAW (optional)
 exports.getMyConsumptions = async (req, res) => {
   try {
-    console.log("Fetching consumptions for user:", req.userId);
+    const consumptions = await Consumption.find({ user: req.userId }).sort({
+      createdAt: -1,
+    });
 
-    const consumptions = await Consumption.find({ user: req.userId }).sort({ createdAt: -1 });
     res.json(consumptions);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+
+// 🚀 IMPORTANT: DASHBOARD SUMMARY (FIX YOUR PROBLEM)
+eexports.getConsumptionSummary = async (req, res) => {
+  try {
+    console.log("USER ID:", req.user.id);
+
+    const consumptions = await Consumption.find({
+      user: req.user.id,
+    });
+
+    console.log("FOUND:", consumptions);
+
+    let electricite = 0;
+    let eau = 0;
+    let dechets = 0;
+
+    consumptions.forEach((c) => {
+      if (c.type === "energie") electricite += c.value;
+      if (c.type === "water") eau += c.value;
+      if (c.type === "dechets") dechets += c.value;
+    });
+
+    res.json({ electricite, eau, dechets });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
